@@ -1,0 +1,147 @@
+@startuml sim_architecture
+
+hide empty members
+hide empty methods
+
+'---------- NETSQUID ----------'
+
+package "netsquid" {
+    interface "QuantumProcessor" as qproc
+    'interface "QuantumProgram" as qprog
+    interface "Protocol" as qproto
+    interface "Node" as _node
+    interface "QuantumChannel" as qchan
+    interface "ClassicalChannel" as cchan
+}
+
+'---------- PROTOCOLS ----------'
+
+package protocols {
+    abstract "EntanglementProviderProtocol" as etgmprov
+    abstract "ApplicationProtocol" as appproto
+    abstract "QKDProtocol" as qkdproto {
+        + set_key_length(length: int)
+    }
+
+    class "QKDImpl" as qkdimpl
+    class "SwapEndProt" as swapend
+    class "SwapMidProt" as swapmid
+    class "PurificationImpl" as purify
+    class "SecureSendProtocol" as secsend
+
+    enum "QKDRole" as qkdrole {
+        SENDER,
+        RECEIVER
+    }
+
+    class "Clock" as clk {
+        + delta_time
+    }
+}
+
+'---------- HARDWARE ----------'
+
+package hardware {
+    class "QuantumFiber" as qfibre {
+        + length
+        + noise_model
+        + loss_model
+        + delay_model
+    }
+
+    class "ClassicalFiber" as cfibre {
+        + length
+        + delay_model
+    }
+
+    class "QProcImpl" as qprocimpl {
+        + decoherence_model
+        + gate_delay_model
+        + gate_noise_model
+    }
+}
+
+'---------- NODES ----------'
+
+package nodes {
+    abstract "OpticalNode" as onode
+    abstract "SmartNode" as smartnode
+
+    class "RepeaterNode" as repeater
+    class "BSANode" as bsa
+    class "EndNodeImpl" as endnode
+
+    note right of smartnode
+        A node that can in principle
+        execute any application.
+    end note
+}
+
+'---------- PROCESSORS ----------'
+
+'---------- CLASSICAL ----------'
+
+package classical {
+    interface "ClassicalCode" as ccode {
+        + encode(data: [byte]): [byte]
+        + decode(data: [byte]): [byte]
+    }
+
+    class "ClassicCodeImpl" as ccodeimpl
+}
+
+'---------- INHERITANCE ----------'
+
+qprocimpl --|> qproc
+
+etgmprov --|> qproto
+appproto --|> qproto
+qkdproto --|> appproto
+qkdimpl --|> qkdproto
+swapend --|> etgmprov
+swapmid --|> appproto
+purify --|> etgmprov
+secsend ----|> appproto
+
+qfibre --|> qchan
+cfibre --|> cchan
+
+onode --|> _node
+smartnode --|> onode
+bsa --|> onode
+repeater --|> smartnode
+endnode --|> smartnode
+
+ccodeimpl --|> ccode
+
+'---------- MEMBERS ----------'
+
+onode --> qprocimpl: <<has>>
+smartnode --> appproto: <<runs>>\napp
+secsend --> qkdproto: qencoding
+qkdproto -> qkdrole: role
+ccode <-- secsend: encoding
+
+repeater *-- swapmid: app
+
+'---------- RELATIONS ----------'
+
+etgmprov ..> etgmprov: <<uses>>
+appproto ..> appproto: <<uses>>
+appproto .l.> etgmprov: <<requires>>
+onode ..> qfibre: <<connected>>
+onode ..> cfibre: <<connected>>
+
+note as N1
+    <i>*Impl</i> named classes do not represent
+    a single implementation, but rather
+    any possible implementation of
+    an abstract super class.
+    (e.g. QKDImpl could be BB84, E91, etc.)
+end note
+
+appproto -r[hidden]-> cfibre
+secsend -r[hidden]-> qkdimpl
+ccode -r[hidden]-> qkdproto
+
+@enduml
