@@ -1,5 +1,6 @@
 from .quantum_fibre import QuantumFibre
 from .classical_fibre import ClassicalFibre
+from .qprocessor import QProcessor
 
 SPEED_OF_LIGHT = 299792  # km/s
 C = SPEED_OF_LIGHT
@@ -10,4 +11,5 @@ __all__ = [
 
     'QuantumFibre',
     'ClassicalFibre'
+    'QProcessor'
 ]

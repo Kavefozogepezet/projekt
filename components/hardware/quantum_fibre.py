@@ -39,7 +39,7 @@ class QuantumFibre (Connection):
             models={
                 'quantum_noise_model': DepolarNoiseModel(
                     time_independent=True,
-                    depolar_rate=(1 - np.exp(-attenuation*length))
+                    depolar_rate=(1 - np.exp(-attenuation*length/4))
                 ),
                 'delay_model': FibreDelayModel(c=299792/refractive_index),
                 'quantum_loss_model': FibreLossModel(

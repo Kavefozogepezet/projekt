@@ -1,124 +1,141 @@
 
-import datetime
 import inspect
-import logging
-import netsquid as ns
-from netsquid.protocols import Protocol, LocalProtocol
+from netsquid.protocols import LocalProtocol
 from netsquid.components.qprogram import QuantumProgram
+from abc import ABCMeta as Abstract, abstractmethod
 
 from components.hardware import SPEED_OF_LIGHT
+from simlog import log
 
 
 def program_function(**program_kwargs):
+    class ProgExecutor:
+        def __init__(self, node, prog):
+            self.prog = prog
+            self.node = node
+            self.mapping = None
+
+        def on(self, mapping):
+            self.mapping = mapping
+            yield self.node.qmemory.execute_program(
+                self.prog, qubit_mapping=self.mapping
+            )
+
     def program_function_decorator(prog_func):
         def program_executor(self, *args, **kwargs):
             prog = QuantumProgram(**program_kwargs)
             qindices = prog.get_qubit_indices(program_kwargs['num_qubits'])
             prog_func(self, prog, qindices, *args, **kwargs)
-            yield self.node.qmemory.execute_program(prog)
+            return ProgExecutor(self.node, prog)
         return program_executor
     return program_function_decorator
 
-class log:
-    def __init__(self):
-        raise NotImplementedError('This class is not meant to be instantiated.')
-    
-    @staticmethod
-    def init(level):
-        current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_file = logging.FileHandler(f"./log/sim_{current_datetime}.log")
-        log_file.setLevel(level)
 
-        for handler in ns.logger.handlers:
-            ns.logger.removeHandler(handler)
-        ns.logger.setLevel(level)
-        ns.logger.addHandler(log_file)
-    
-    @staticmethod
-    def info(msg, **kwargs):
-        the_msg = log._construct_message('INFO', msg, **kwargs)
-        ns.logger.info(the_msg)
-
-    @staticmethod
-    def _construct_message(level, msg, **kwargs):
-        if 'at' in kwargs:
-            name = kwargs['at'].name
-            name = f' @@ {name:16}: '
-        elif 'into' in kwargs:
-            name = kwargs['into'].name
-            name = f' >> {name:16}: '
-        elif 'outof' in kwargs:
-            name = kwargs['outof'].name
-            name = f' << {name:16}: '
-        else:
-            name = ' '
-        
-        return f'[{level:5} @ {ns.sim_time():8.2f}]{name}{msg}'
-    
-
-def statehandler(*states):
+def protocolstate(*states, initial=False, final=False):
     def decorator(func):
         func.__states__ = states
+        func.__initial__ = initial
+        func.__final__ = final
         return func
     return decorator
 
 
-def StatefulProtocolTemplate(BaseType, initial_state, final_state=None):
-    if not issubclass(BaseType, Protocol):
-        raise ValueError('BaseType must be a subclass of netsquid.protocols.Protocol')
-    
-    class StatefulProtocol (BaseType):
-        def __init__ (self, *args, **kwargs):
+def StatefulProtocolTempalte(BaseType):
+    class StatefulProtocol (BaseType, metaclass=Abstract):
+        def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._final_state = final_state
-            self._StateType = initial_state.__class__
-            self._state = None
-            self.set_state(initial_state)
-            self._state_handlers = {}
-            for func_name in dir(self):
-                func = getattr(self, func_name)
-                if hasattr(func, '__states__'):
-                    for state in func.__states__:
-                        if state not in self._StateType:
-                            raise ValueError(f'Invalid state for handler {state}')
-                        if state in self._state_handlers:
-                            raise ValueError(f'Duplicate handler for state {state}')
-                        self._state_handlers[state] = func
-    
-        def set_state(self, state):
-            if state not in self._StateType:
-                raise ValueError(f'Invalid state {state}')
-            if self._final_state and self._state == self._final_state:
-                raise RuntimeError(f'Cannot change state from final state {self._final_state}')
-            if state != self._state:
-                self._state = state
-                log.info(f'State of {self.name} changed to {state}', at=self.node)
-    
-        def get_state(self):
-            return self._state
-        
-        def run(self):
-            while True:
-                handler = self._state_handlers[self._state]
-                if not handler:
-                    raise RuntimeError(f'No handler for state {self._state}')
-                next_state = None
-                handler_gen = handler()
-                if inspect.isgenerator(handler_gen):
-                    try:
-                        result = None
-                        while True:
-                            result = yield handler_gen.send(result)
-                    except StopIteration as e:
-                        next_state = e.value
-                else:
-                    next_state = handler_gen
-    
-                if self._state == self._final_state:
-                    break
-                self.set_state(next_state)
+            self._sm = self.create_statemachine()
 
+        @abstractmethod
+        def create_statemachine(self):
+            pass
+
+        def run(self):
+            yield from self._sm.run()
+
+        def set_state(self, state):
+            self._sm.set_state(state)
+
+        def get_state(self):
+            return self._sm.get_state()
+        
     return StatefulProtocol
+
+
+class ProtocolStateMachine:
+    def __init__(self, protocol):
+        self._state_handlers = dict()
+        self._state = None
+        self._final_states = []
+        self.proto = protocol
+
+        for func_name in dir(self):
+            func = getattr(self, func_name)
+            if hasattr(func, '__states__'):
+                initial = func.__initial__
+                final = func.__final__
+                states = func.__states__
+
+                init_state = self._deduce_special_state(initial, states, 'initial')
+                if init_state:
+                    if self._state == None:
+                        self.set_state(init_state)
+                    else:
+                        raise ValueError(f'Cannot have multiple initial states for {self.__class__}')
+                    
+                final_state = self._deduce_special_state(final, states, 'final')
+                if final_state:
+                    self._final_states.append(final_state)
+
+                for state in func.__states__:
+                    if state in self._state_handlers:
+                        raise ValueError(f'Duplicate handler for state {state}')
+                    self._state_handlers[state] = func
+
+    def _deduce_special_state(self, marker, states, name):
+        if type(marker) == None:
+            return None
+        elif type(marker) == bool:
+            if marker: return states[0]
+            else: return None
+        elif type(marker) == int:
+            return states[marker]
+        else:
+            raise ValueError(f'The {name} state can be marked with a boolean or an integer, {marker} is neither')
+    
+    def set_state(self, state):
+        if state != self._state:
+            if self._final_states and self._state in self._final_states:
+                raise RuntimeError(f'Cannot change state from final state {self._state}')
+            self._state = state
+            log.info(f'State of {self.proto.name} changed to {state}', at=self.proto.node)
+    
+    def get_state(self):
+        return self._state
+    
+    def run(self):
+        if not self._state:
+            raise RuntimeError(f'No initial state defined for {self.__class__}, define it using @protocolstate(..., initial=<value>) or manually using set_state(<state>)')
+
+        while True:
+            handler = self._state_handlers[self._state]
+            if not handler:
+                raise RuntimeError(f'No handler for state {self._state} in {self.__class__}')
+            next_state = None
+            handler_gen = handler()
+            if inspect.isgenerator(handler_gen):
+                try:
+                    result = None
+                    while True:
+                        result = yield handler_gen.send(result)
+                except StopIteration as e:
+                    next_state = e.value
+            else:
+                next_state = handler_gen
+
+            if self._state in self._final_states:
+                break
+            self.set_state(next_state)
 
 
 class Clock (LocalProtocol):
@@ -127,12 +144,14 @@ class Clock (LocalProtocol):
     def __init__(self, delta_time, nodes=None, name=None):
         super().__init__(name=name)
         self._delta_time = delta_time
+        self._tick_count = 0
         self.add_signal(Clock.TICK)
         for node in nodes:
             self.nodes[node.name] = node
 
     def run(self):
         while True:
+            self._tick_count += 1
             self.send_signal(Clock.TICK)
             node_names = ','.join(self.nodes.keys())
             log.info(f'TICK for {node_names}', at=self)
@@ -140,6 +159,9 @@ class Clock (LocalProtocol):
 
     def delta_time(self):
         return self._delta_time
+    
+    def tick_count(self):
+        return self._tick_count
     
     @staticmethod
     def for_roundtrip(length, refraction_index, answare_delay=0):
