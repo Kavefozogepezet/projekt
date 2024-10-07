@@ -1,0 +1,26 @@
+@startuml network_statemachine
+
+state IDLE: Waiting for an
+state IDLE: incoming request
+
+state INITIATING: Notifying the route
+state INITIATING: about the request
+
+state SWAPPING: Swapping link level pairs
+state SWAPPING: Correcting qubit based
+state SWAPPING: on the TRACK message
+
+state corrected <<choice>>
+state finished <<choice>>
+
+[*] -> IDLE: [role = headend]
+IDLE -> INITIATING: request(n)
+INITIATING -> SWAPPING: initiated \n [count = 0]
+SWAPPING --> corrected: TRACK recieved \n [count++]
+corrected -u-> SWAPPING: [count < n]
+corrected -l-> finished: [count = n]
+finished -u-> IDLE: [queue empty]
+finished -u-> INITIATING: [else]
+
+
+@enduml

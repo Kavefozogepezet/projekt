@@ -1,34 +1,33 @@
 
 import inspect
-from netsquid.protocols import LocalProtocol
-from netsquid.components.qprogram import QuantumProgram
+from collections import deque, namedtuple
+from enum import Enum
+import netsquid as ns
+from netsquid.protocols import LocalProtocol, NodeProtocol
 from abc import ABCMeta as Abstract, abstractmethod
+from shortuuid import uuid
 
 from components.hardware import SPEED_OF_LIGHT
 from simlog import log
 
 
-def program_function(**program_kwargs):
-    class ProgExecutor:
-        def __init__(self, node, prog):
-            self.prog = prog
-            self.node = node
-            self.mapping = None
+class Role (Enum):
+    SENDER = 'Role.SENDER'
+    RECEIVER = 'Role.RECEIVER'
 
-        def on(self, mapping):
-            self.mapping = mapping
-            yield self.node.qmemory.execute_program(
-                self.prog, qubit_mapping=self.mapping
-            )
 
-    def program_function_decorator(prog_func):
-        def program_executor(self, *args, **kwargs):
-            prog = QuantumProgram(**program_kwargs)
-            qindices = prog.get_qubit_indices(program_kwargs['num_qubits'])
-            prog_func(self, prog, qindices, *args, **kwargs)
-            return ProgExecutor(self.node, prog)
-        return program_executor
-    return program_function_decorator
+EntanglementRecord = namedtuple(
+    'EntanglementID',
+    ['position', 'id']
+)
+
+
+def etgmid(namespace):
+    return f'{namespace}/{uuid()}'
+
+
+def subheader(header, *subheaders):
+    return '/'.join([header, *subheaders])
 
 
 def protocolstate(*states, initial=False, final=False):
@@ -38,6 +37,100 @@ def protocolstate(*states, initial=False, final=False):
         func.__final__ = final
         return func
     return decorator
+
+
+class QueuedProtocol (NodeProtocol):
+    _REQ_ARRIVED = 'RequestQueueProtocol.REQ_ARRIVED'
+
+    def __init__(self, node, name=None):
+        super().__init__(node, name)
+        self._queue = deque()
+        self.add_signal(QueuedProtocol._REQ_ARRIVED)
+
+    def _await_request(self):
+        yield self.await_signal(
+            sender=self,
+            signal_label=QueuedProtocol._REQ_ARRIVED
+        )
+
+    def _poll_request(self):
+        if len(self._queue) > 0:
+            return self._queue.popleft()
+        return None
+
+    def _poll_requests(self):
+        while len(self._queue) > 0:
+            yield self._poll_request()
+
+    def _peek_request(self):
+        if len(self._queue) > 0:
+            return self._queue[0]
+        return None
+
+    def _push_request(self, req_label, ans_label, **kwargs):
+        req = ProtocolRequest(self, req_label, ans_label, **kwargs)
+        self._queue.append(req)
+        self.send_signal(QueuedProtocol._REQ_ARRIVED)
+        return req
+    
+
+class ProtocolRequest:
+    def __init__(self, protocol, req_label, ans_label, **kwargs):
+        self.proto = protocol
+        self.id = uuid()
+        self.req_label = req_label
+        self.ans_label = ans_label
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+        
+    def await_as(self, awaiting_protocol):
+        while True:
+            yield self.resp_event(awaiting_protocol)
+            resp = self.get_answare(awaiting_protocol)
+            if resp.id == self.id:
+                return resp
+            
+    def answare(self, **kwargs):
+        resp = ProtocolResponse(self.id, **kwargs)
+        self.proto.send_signal(self.ans_label, resp)
+
+    def resp_event(self, awaiting_protocol):
+        return awaiting_protocol.await_signal(
+            sender=self.proto,
+            signal_label=self.ans_label
+        )
+    
+    def get_answare(self, awaiting_protocol):
+        return self.proto.get_signal_result(self.ans_label, awaiting_protocol)
+
+    @staticmethod
+    def await_all(awaiting_protocol, *reqs):
+        evexpr = None
+        for req in reqs:
+            ev = awaiting_protocol.await_signal(
+                sender=req.proto,
+                signal_label=req.ans_label
+            )
+            if evexpr:
+                evexpr = ev
+            else:
+                evexpr = evexpr & ev
+
+        yield evexpr
+        results = []
+        for req in reqs:
+            res = req.proto.get_signal_result(req.ans_label, awaiting_protocol)
+            results.append(res)
+
+        return results
+        
+
+
+class ProtocolResponse:
+    def __init__(self, id, **kwargs):
+        self.id = id
+        for name, value in kwargs.items():
+            setattr(self, name, value)
 
 
 def StatefulProtocolTempalte(BaseType):
@@ -108,7 +201,7 @@ class ProtocolStateMachine:
             if self._final_states and self._state in self._final_states:
                 raise RuntimeError(f'Cannot change state from final state {self._state}')
             self._state = state
-            log.info(f'State of {self.proto.name} changed to {state}', at=self.proto.node)
+            log.info(f'State change -> {state.value}', at=self.proto)
     
     def get_state(self):
         return self._state
@@ -133,6 +226,8 @@ class ProtocolStateMachine:
             else:
                 next_state = handler_gen
 
+            if next_state == None:
+                raise RuntimeError(f'Handler for state {self._state} in {self.__class__} returned None')
             if self._state in self._final_states:
                 break
             self.set_state(next_state)

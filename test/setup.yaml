@@ -1,0 +1,19 @@
+headend:
+  name: Alice
+  processor:
+    size: 2
+    T1: 200us
+    T2: 200us
+tailend:
+  name: Bob
+  processor:
+    size: 2
+    T1: 200us
+    T2: 200us
+repeaters:
+  count: 2
+  name: 'Rep{serial}'
+  processor:
+    size: 2
+    T1: 200us
+    T2: 200us
