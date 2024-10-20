@@ -7,11 +7,13 @@ import numpy as np
 
 
 class QuantumFibre (Connection):
-    def __init__ (self, name, length, attenuation=0.2, refractive_index=1.45):
+    def __init__ (self, name, length, attenuation=0.2, depolarizing_coeff=100, refractive_index=1.45):
         super().__init__(name)
 
         if refractive_index < 1:
             raise ValueError('Refractive index must be greater than 1')
+        
+        self.L0 = depolarizing_coeff
         
         A2B_channel_name = f'{name}_A2B'
         A2B_channel = self._prepare_channel(
@@ -39,7 +41,7 @@ class QuantumFibre (Connection):
             models={
                 'quantum_noise_model': DepolarNoiseModel(
                     time_independent=True,
-                    depolar_rate=(1 - np.exp(-attenuation*length/4))
+                    depolar_rate=1-np.exp(-length/self.L0)
                 ),
                 'delay_model': FibreDelayModel(c=299792/refractive_index),
                 'quantum_loss_model': FibreLossModel(

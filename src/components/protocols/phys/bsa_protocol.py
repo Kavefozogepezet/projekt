@@ -1,4 +1,5 @@
 
+import numpy as np
 import netsquid as ns
 from enum import Enum
 from netsquid.protocols import NodeProtocol
@@ -20,7 +21,7 @@ class BSAProtocol(StatefulProtocolTempalte(NodeProtocol)):
     SUCCESS = 'SUCCESS'
     FAILURE = 'FAILURE'
 
-    def __init__(self, node, clock, detection_offset, detection_window, name=None):
+    def __init__(self, node, clock, detection_offset, detection_window, detector_efficiency=1, name=None):
         self.log_layer = log.Layer.PHYSICAL
         super().__init__(node, name)
         if detection_offset + detection_window > clock.delta_time():
@@ -28,6 +29,7 @@ class BSAProtocol(StatefulProtocolTempalte(NodeProtocol)):
         
         self.detection_offset = detection_offset
         self.detection_window = detection_window
+        self.detector_eff = detector_efficiency
         self.clock = clock
 
     def create_statemachine(self):
@@ -77,6 +79,12 @@ class BSAProtocolStatemachine (ProtocolStateMachine):
         if self.get_state() == BSAState.WAITING_PHOTON_1:
             return BSAState.WAITING_PHOTON_2
         else:
+            detected = np.random.rand() <= self.proto.detector_eff**2
+            if not detected:
+                log.info(f'Unsuccessful Bell-state measurement: a detector did not work', at=self.proto)
+                self._announce(BSAProtocol.FAILURE)
+                return BSAState.WAITING_TICK
+
             mem = self.proto.node.qmemory
             mem.operate(ns.CNOT, [0, 1])
             mem.operate(ns.H, 0)

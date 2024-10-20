@@ -57,7 +57,7 @@ def install_bsa(net, node1, qport1, cport1, node2, qport2, cport2):
     quantum_connect(net, node2, qport2, bsa, 'qinB', 2)
 
     clock = Clock(20*MICROSECOND, [node1, node2, bsa], name=f'Clk{_bsa_count}')
-    bsa_phys = BSAProtocol(bsa, clock, 9*MICROSECOND, 1*MICROSECOND, name=f'{bsa_name}PHYS')
+    bsa_phys = BSAProtocol(bsa, clock, 9*MICROSECOND, 1*MICROSECOND, 1, name=f'{bsa_name}PHYS')
     phys1 = SwapWithBSAProtocol(node1, clock, qport1, cport1, name=f'{node1.name}PHYS')
     phys2 = SwapWithBSAProtocol(node2, clock, qport2, cport2, name=f'{node2.name}PHYS')
 

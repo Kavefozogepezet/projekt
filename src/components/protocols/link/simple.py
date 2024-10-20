@@ -34,27 +34,30 @@ class SimPLE (LinkLayer):
     def _handle_atomic_request(self, req):
         qubits = []
         count = req.count
+        tries = []
         while count > 0 and not req.cancelled:
-            resp = yield from self._attempt_until_success(req)
+            resp, tries = yield from self._attempt_until_success(req)
             if not req.cancelled:
                 qubits.append(EntanglementRecord(
                     position=resp.position,
                     id=resp.etgm_id
                 ))
+                tries.append(tries)
                 count -= 1
 
         if not req.cancelled:
             req.answare(
                 result=LinkLayer.OK,
                 response_type=LinkResponseType.ATOMIC,
-                qubits=qubits
+                qubits=qubits,
+                tries=tries
             )
             log.info(f'Link delivered {count} qubits', at=self)
 
     def _handle_consecutive_request(self, req):
         count = req.count
         while count > 0 and not req.cancelled:
-            resp = yield from self._attempt_until_success(req)
+            resp, tries = yield from self._attempt_until_success(req)
             if not req.cancelled:
                 req.answare(
                     result=LinkLayer.OK,
@@ -63,7 +66,8 @@ class SimPLE (LinkLayer):
                     qubit=EntanglementRecord(
                         position=resp.position,
                         id=resp.etgm_id
-                    )
+                    ),
+                    tries=tries
                 )
                 if count == 1:
                     log.info(f'Link delivered qubit #{count} (last): {resp.etgm_id}', at=self)
@@ -74,7 +78,7 @@ class SimPLE (LinkLayer):
     def _handle_infinite_consecutive_request(self, req):
         # TODO untested
         while not req.cancelled:
-            resp = yield from self._attempt_until_success(req)
+            resp, tries = yield from self._attempt_until_success(req)
             if not req.cancelled:
                 req.answare(
                     result=LinkLayer.OK,
@@ -82,20 +86,23 @@ class SimPLE (LinkLayer):
                     qubit=EntanglementRecord(
                         position=resp.position,
                         id=resp.etgm_id
-                    )
+                    ),
+                    tries=tries
                 )
                 log.info(f'Link delivered qubit: {resp.etgm_id}', at=self)
 
     def _attempt_until_success(self, req):
         phys_proto = self.subprotocols['physical_protocol']
         [pos] = yield from self._allocate_qubits(1)
+        tries = 0
         while not req.cancelled:
             resp = yield from (phys_proto
                 .attempt_entanglement(pos)
                 .await_as(self)
             )
+            tries += 1
             if resp.result == PhysicalLayer.SUCCESS:
-                return resp
+                return resp, tries
         
         self.node.qmemory.deallocate([pos])
         return None

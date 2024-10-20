@@ -45,6 +45,7 @@ class MockNetLayer (LocalProtocol):
 
                 fid = fidelity([q1, q2], ketstates.b00)
                 log.info(f'MOCK_TRANS_LAYER: Fidelity of entanglement: {fid}')
+                ns.logger.info(f'{q1.qstate.dm}')
 
                 self.node1.qmemory.deallocate([resp1.qubit.position])
                 self.node2.qmemory.deallocate([resp2.qubit.position])

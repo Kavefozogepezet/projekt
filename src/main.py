@@ -14,7 +14,6 @@ from components.protocols.util import Clock
 from components.hardware import QuantumFibre, ClassicalFibre, QProcessor
 from components.nodes import BSANode
 from components.protocols.link import SimPLE
-from mock.net_mock import MockNetLayer
 
 
 def main():
@@ -82,7 +81,11 @@ def main():
     bob_phys = SwapWithBSAProtocol(bob, clock, 'qout', 'cin')
     bob_link = SimPLE(bob, bob_phys)
 
-    bsa_phys = BSAProtocol(bsa, clock, detection_offset=9*MICROSECOND, detection_window=1*MICROSECOND)
+    bsa_phys = BSAProtocol(bsa, clock,
+        detection_offset=9*MICROSECOND,
+        detection_window=1*MICROSECOND,
+        detector_efficiency=1
+    )
 
     net_mock = MockNetLayer(alice, bob, alice_link, bob_link, 'MockLinkLayer')
 

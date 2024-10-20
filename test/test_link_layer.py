@@ -31,7 +31,7 @@ def test_link_layer():
         port_names=['qout', 'cin'],
         qmemory=QProcessor(
             name='alices_processor',
-            size=2, T1=1*MILLISECOND, T2=100*MICROSECOND,
+            size=2, T1=80*MICROSECOND, T2=40*MICROSECOND,
             fallback_to_nonphysical=True
         )
     )
@@ -40,7 +40,7 @@ def test_link_layer():
         port_names=['qout', 'cin'],
         qmemory=QProcessor(
             name='bobs_processor',
-            size=2, T1=1*MILLISECOND, T2=100*MICROSECOND,
+            size=2, T1=80*MICROSECOND, T2=40*MICROSECOND,
             fallback_to_nonphysical=True
         )
     )
@@ -48,8 +48,8 @@ def test_link_layer():
 
     clock = Clock(delta_time=20*MICROSECOND, nodes=[alice, bob, bsa])
 
-    qA2BSA = QuantumFibre('Alice-BSA_quantum', 2, 0)
-    qB2BSA = QuantumFibre('Bob-BSA_quantum', 2, 0)
+    qA2BSA = QuantumFibre('Alice-BSA_quantum', 2)
+    qB2BSA = QuantumFibre('Bob-BSA_quantum', 2)
 
     cA2BSA = ClassicalFibre('Alice-BSA_classical', 2)
     cB2BSA = ClassicalFibre('Bob-BSA_classical', 2)
@@ -82,7 +82,7 @@ def test_link_layer():
     bob_phys = SwapWithBSAProtocol(bob, clock, 'qout', 'cin')
     bob_link = SimPLE(bob, bob_phys)
 
-    bsa_phys = BSAProtocol(bsa, clock, detection_offset=9*MICROSECOND, detection_window=1*MICROSECOND)
+    bsa_phys = BSAProtocol(bsa, clock, 9*MICROSECOND, 1*MICROSECOND, 1)
 
     net_mock = MockNetLayer(alice, bob, alice_link, bob_link, 'MockLinkLayer')
 

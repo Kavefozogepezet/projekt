@@ -94,7 +94,7 @@ def test_net_layer():
     bob_link = SimPLE(bob, bob_phys, name='Bob_LINK')
     bob_net = SwapWithRepeaterProtocol(bob, 'cdirect', bob_link, name='Bob_NET')
 
-    bsa_phys = BSAProtocol(bsa, clock, detection_offset=9*MICROSECOND, detection_window=1*MICROSECOND, name='AB_BSA')
+    bsa_phys = BSAProtocol(bsa, clock, 9*MICROSECOND, 1*MICROSECOND, 1, name='AB_BSA')
 
     trans_mock = MockTransportLayer(alice, bob, alice_net, bob_net, name='MockLinkLayer')
 
