@@ -263,7 +263,7 @@ class _RepEtgmManagerMinion (NodeProtocol):
             elif len(self._downstream) > 0:
                 next_cutoff = self._downstream[0].time
 
-            if next_cutoff != None:
+            if next_cutoff is not None:
                 next_cutoff = max(next_cutoff, ns.sim_time())
                 qubit_expired = self.await_timer(end_time=next_cutoff)
                 expr = yield link_ready | qubit_expired
@@ -324,13 +324,13 @@ class _RepEtgmManagerMinion (NodeProtocol):
         in_up = any(data['id'] == rec.qubit.id for rec in self._upstream)
         in_down = any(data['id'] == rec.qubit.id for rec in self._downstream)
 
-        if in_up or in_down:
-            self._track_queue.append(_TrackRecord(
-                data, next_hop_port, last_hop_port, track_correction))
-            log.info(f'Queued: {log.msg2str([SwapWithRepeaterProtocol.TRACK_MSG, data])}', at=self.rep_proto)
-        else:
-            id = data['id']
-            raise ValueError(f'Recieved track message for unknown qubit: {id}')
+        #if in_up or in_down:
+        self._track_queue.append(_TrackRecord(
+            data, next_hop_port, last_hop_port, track_correction))
+        log.info(f'Queued: {log.msg2str([SwapWithRepeaterProtocol.TRACK_MSG, data])}', at=self.rep_proto)
+        #else:
+        #    id = data['id']
+        #    raise ValueError(f'Recieved track message for unknown qubit: {id}')
         
     def _track_and_swap(self, track_rec, swap_rec):
         data = track_rec.data
@@ -390,10 +390,14 @@ class _RepEtgmManagerMinion (NodeProtocol):
             )
             log.info(f'Swapped qubits {q_up.id}, {q_down.id}, cX: {rec.cX}, cZ: {rec.cZ}', at=self.rep_proto)
 
+            to_remove = []
             for track in self._track_queue:
                 sent = self._track_and_swap(track, rec)
                 if sent:
-                    self._track_queue.remove(track)
+                    to_remove.append(track)
+                    #self._track_queue.remove(track)
+            for track in to_remove:
+                self._track_queue.remove(track)
             self._swap_records.append(rec)
                 
     def _handle_expired_qubit(self):
@@ -401,14 +405,15 @@ class _RepEtgmManagerMinion (NodeProtocol):
             rec = self._upstream.pop(0)
         else:
             rec = self._downstream.pop(0)
+        discard_rec = _DiscardRecord(rec.qubit.id)
         self.node.qmemory.destroy([rec.qubit.position])
         log.info(f'Qubit expired: {rec.qubit.id}', at=self.rep_proto)
         for track in self._track_queue:
-            sent = self._track_and_discard(track, rec)
+            sent = self._track_and_discard(track, discard_rec)
             if sent:
                 self._track_queue.remove(track)
                 return
-        self._discard_records.append(_DiscardRecord(rec.qubit.id))
+        self._discard_records.append(discard_rec)
 
     @program_function(2, ProgramPriority.HIGH)
     def swap(self, prog, qubits):

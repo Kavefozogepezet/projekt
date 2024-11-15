@@ -11,7 +11,7 @@ from netsquid.util.simtools import MICROSECOND, MILLISECOND
 from simlog import log
 from components.protocols.phys import BSAProtocol, SwapWithBSAProtocol, PhysicalLayer
 from components.protocols.util import Clock
-from components.hardware import QuantumFibre, ClassicalFibre, QProcessor
+from components.hardware import QuantumFibre, ClassicalFibre, NVCProcessor
 from components.nodes import BSANode
 from components.protocols.link import SimPLE
 from mock.net_mock import MockNetLayer
@@ -29,7 +29,7 @@ def test_link_layer():
     alice = Node(
         name='Alice',
         port_names=['qout', 'cin'],
-        qmemory=QProcessor(
+        qmemory=NVCProcessor(
             name='alices_processor',
             size=2, T1=80*MICROSECOND, T2=40*MICROSECOND,
             fallback_to_nonphysical=True
@@ -38,7 +38,7 @@ def test_link_layer():
     bob = Node(
         name='Bob',
         port_names=['qout', 'cin'],
-        qmemory=QProcessor(
+        qmemory=NVCProcessor(
             name='bobs_processor',
             size=2, T1=80*MICROSECOND, T2=40*MICROSECOND,
             fallback_to_nonphysical=True

@@ -1,6 +1,6 @@
 from .quantum_fibre import *
 from .classical_fibre import *
-from .qprocessor import *
+from .nvcprocessor import *
 
 SPEED_OF_LIGHT = 299792  # km/s
 C = SPEED_OF_LIGHT
@@ -11,7 +11,7 @@ __all__ = [
 
     'QuantumFibre',
     'ClassicalFibre',
-    'QProcessor',
+    'NVCProcessor',
     'program_function',
     'ProgramPriority'
 ]

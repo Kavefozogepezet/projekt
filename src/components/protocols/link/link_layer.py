@@ -33,7 +33,7 @@ class LinkLayer (
         return LinkLayerStatemachine(self)
 
     @abstractmethod
-    def _share_entanglement(self, req):
+    def _fulfill_request(self, req):
         pass
 
     def request_entanglement(
@@ -43,7 +43,7 @@ class LinkLayer (
         timeout=None,
         **kwargs
     ):
-        if count == None and response_type == LinkResponseType.ATOMIC:
+        if count is None and response_type == LinkResponseType.ATOMIC:
             raise ValueError('An atomic request must specify the number of qubits to allocate (count)')
 
         return self._push_request(
@@ -55,19 +55,6 @@ class LinkLayer (
             cancelled=False,
             **kwargs
         )
-    
-    def _allocate_qubits(self, count):
-        while True:
-            try:
-                return self.node.qmemory.allocate(count, self.partition)
-            except QuantumMemoryError:
-                if self.partition: poss = self.partition
-                # TODO proc should have a function like .get_mem_positions()
-                else: poss = range(len(self.node.qmemory.mem_positions) - 1)
-                yield self.await_mempos_in_use_toggle(
-                    qmemory=self.node.qmemory,
-                    positions=list(poss)
-                )
 
 
 class LinkState (Enum):
@@ -84,5 +71,5 @@ class LinkLayerStatemachine (ProtocolStateMachine):
     @protocolstate(LinkState.SHARING)
     def _sharing(self):
         for req in self.proto._poll_requests():
-            yield from self.proto._share_entanglement(req)
+            yield from self.proto._fulfill_request(req)
         return LinkState.IDLE

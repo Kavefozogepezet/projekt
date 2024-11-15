@@ -13,7 +13,7 @@ state SWAPPING: on the TRACK message
 state corrected <<choice>>
 state finished <<choice>>
 
-[*] -> IDLE: [role = headend]
+[*] -> IDLE
 IDLE -> INITIATING: request(n)
 INITIATING -> SWAPPING: initiated \n [count = 0]
 SWAPPING --> corrected: TRACK recieved \n [count++]

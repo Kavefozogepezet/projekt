@@ -193,7 +193,8 @@ class _SWRCorrectionMinion (QueuedProtocol):
             yield from self._await_request()
             for req in self._poll_requests():
                 log.info(f'Correcting qubit with: cX: {req.cX}, cZ: {req.cZ}', at=self.net_proto)
-                yield from self._correct([req.position], req.cX, req.cZ)
+                if req.cX or req.cZ:
+                    yield from self._correct([req.position], req.cX, req.cZ)
                 req.net_req.answare(
                     qubit=EntanglementRecord(
                         position=req.position,

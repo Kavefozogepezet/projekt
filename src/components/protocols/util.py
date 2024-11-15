@@ -23,7 +23,8 @@ EntanglementRecord = namedtuple(
 
 
 def etgmid(namespace):
-    return f'{namespace}/{uuid()}'
+    id = uuid()
+    return f'{namespace}/{id}'
 
 
 def subheader(header, *subheaders):
@@ -171,7 +172,7 @@ class ProtocolStateMachine:
 
                 init_state = self._deduce_special_state(initial, states, 'initial')
                 if init_state:
-                    if self._state == None:
+                    if self._state is None:
                         self.set_state(init_state)
                     else:
                         raise ValueError(f'Cannot have multiple initial states for {self.__class__}')
@@ -186,7 +187,7 @@ class ProtocolStateMachine:
                     self._state_handlers[state] = func
 
     def _deduce_special_state(self, marker, states, name):
-        if type(marker) == None:
+        if type(marker) is None:
             return None
         elif type(marker) == bool:
             if marker: return states[0]
@@ -226,7 +227,7 @@ class ProtocolStateMachine:
             else:
                 next_state = handler_gen
 
-            if next_state == None:
+            if next_state is None:
                 raise RuntimeError(f'Handler for state {self._state} in {self.__class__} returned None')
             if self._state in self._final_states:
                 break

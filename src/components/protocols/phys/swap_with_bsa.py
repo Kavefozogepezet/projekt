@@ -65,8 +65,8 @@ class SwapWithBSAProtocol (PhysicalLayer):
     @program_function(2, ProgramPriority.REAL_TIME)
     def prepare_bell_state(self, prog, qubits):
         [q1, q2] = qubits
-        prog.apply(INSTR_INIT, [q1])
-        prog.apply(INSTR_INIT, [q2])
+        prog.apply(INSTR_INIT, q1)
+        prog.apply(INSTR_INIT, q2)
         prog.apply(INSTR_H, q1)
         prog.apply(INSTR_CNOT, [q1, q2])
 

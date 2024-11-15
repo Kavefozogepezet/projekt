@@ -12,7 +12,7 @@ from netsquid.util.simtools import MICROSECOND, MILLISECOND
 from simlog import log
 from components.protocols.phys import BSAProtocol, SwapWithBSAProtocol, PhysicalLayer
 from components.protocols.util import Clock
-from components.hardware import QuantumFibre, ClassicalFibre, QProcessor
+from components.hardware import QuantumFibre, ClassicalFibre, NVCProcessor
 from components.nodes import BSANode
 from components.protocols.link import SimPLE
 from components.protocols.net import SwapWithRepeaterProtocol
@@ -32,7 +32,7 @@ def test_net_layer():
     alice = Node(
         name='Alice',
         port_names=['qout', 'cin', 'cdirect'],
-        qmemory=QProcessor(
+        qmemory=NVCProcessor(
             name='Alice_proc',
             size=2, T1=1*MILLISECOND, T2=100*MICROSECOND,
             fallback_to_nonphysical=True
@@ -41,7 +41,7 @@ def test_net_layer():
     bob = Node(
         name='Bob',
         port_names=['qout', 'cin', 'cdirect'],
-        qmemory=QProcessor(
+        qmemory=NVCProcessor(
             name='Bob_proc',
             size=2, T1=1*MILLISECOND, T2=100*MICROSECOND,
             fallback_to_nonphysical=True

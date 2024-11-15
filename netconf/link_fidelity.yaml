@@ -1,0 +1,37 @@
+node:
+  processor:
+    communication_qubit:
+      T1: 3600s
+      T2: 1.46s
+      F_init: 0.99
+      t_init: 8us
+      F_readout: 0.93
+      t_readout: 40us
+      F_gate: 1
+      t_gate: 5ns
+      photon_collection: 1
+    memory_qubits:
+      num_in_centre: 9
+      T1: 3600s
+      T2: 1.46s
+      F_init: 0.99
+      t_init: 0
+      F_gate: 1
+      t_gate: 0
+      F_readout: 0.92
+      t_readout: 550us
+    multiqubit_gates:
+      F_CX: 0.98
+      t_CX: 1ms
+    inter_centre_gates:
+      F_CX: 0.92
+      t_CX: 5ms
+  qfc:
+    efficiency: 1
+fibre:
+  attenuation: 0
+  index_of_refraction: 1.45
+  depolarization_length: 50
+bsa:
+  SPD_efficiency: 1
+  SPD_rst: 40ms

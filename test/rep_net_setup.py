@@ -3,7 +3,7 @@ from netsquid.nodes import Node
 from netsquid.util.simtools import MICROSECOND, MILLISECOND, SECOND
 from netsquid.nodes import Network
 
-from components.hardware import QuantumFibre, ClassicalFibre, QProcessor
+from components.hardware import QuantumFibre, ClassicalFibre, NVCProcessor
 from components.nodes import BSANode
 from components.protocols.phys import BSAProtocol, SwapWithBSAProtocol
 from components.protocols.util import Clock
@@ -17,7 +17,7 @@ def create_node(name, ports, proc_size):
     return Node(
         name=name,
         port_names=ports,
-        qmemory=QProcessor(
+        qmemory=NVCProcessor(
             name=f'{name}PROC',
             size=proc_size, T1=200*MILLISECOND, T2=100*MILLISECOND,
             fallback_to_nonphysical=True

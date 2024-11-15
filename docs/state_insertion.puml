@@ -1,0 +1,26 @@
+@startuml state_insertion
+
+start
+
+repeat
+    :Await request;
+    repeat
+        :determine generation time;
+        repeat
+            if (halted?) then (yes)
+                repeat
+                    :await resume or proc;
+                    backward :update resume time;
+                repeat while (event type?) is (proc) not (resume)
+            else (no)
+                :await timer or proc;
+                if (event type?) then (proc)
+                    :halt;
+                else (timer)
+                    :update generation time;
+                endif
+            endif
+        repeat while (generation time elapsed?) is (no) not (yes)
+    repeat while (generation time elapsed?) is (no) not (yes)
+
+@enduml
