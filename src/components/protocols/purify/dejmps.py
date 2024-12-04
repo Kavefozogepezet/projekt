@@ -27,19 +27,27 @@ class DEJMPSProtocol (NodeProtocol):
 
     ITER_MSG = 'ITER_MSG'
 
-    def __init__(self, node, cport, mode, log_layer=None, name=None):
+    @staticmethod
+    def get_header(layer=None):
+        if layer is None:
+            return 'DEJMPS'
+        else:
+            return f'DEJMPS({layer})'
+
+    def __init__(self, node, cport, mode, log_layer=None, name=None, prog_reason=None):
         super().__init__(node, name)
         self.add_signal(DEJMPSProtocol.PURIFICATION_COMPLETE)
         if log_layer:
             self.log_layer = log_layer
-            self.MSG_HEADER = f'BBPSSW({log_layer})'
-        else:
-            self.MSG_HEADER = 'BBPSSW'
+        self.MSG_HEADER = DEJMPSProtocol.get_header(log_layer)
         self.cport = self.node.ports[cport]
         self.mode = mode
         self.records = dict()
         self.minion = _PurificationMinion(self.node, self)
         self.add_subprotocol(self.minion, name='minion')
+        if prog_reason:
+            self.prog_reason = prog_reason
+            self.minion.prog_reason = prog_reason
 
     def run(self):
         self.start_subprotocols()
@@ -108,16 +116,16 @@ class _PurificationMinion (QueuedProtocol):
     MEASUREMENT_COMPLETED = 'MEASUREMENT_COMPLETED'
 
 
-    def __init__(self, node, bbpssw, name=None):
+    def __init__(self, node, dejmps, name=None):
         super().__init__(node, name)
         self.add_signal(_PurificationMinion.MEASUREMENT_COMPLETED)
-        self.bbpssw = bbpssw
+        self.dejmps = dejmps
 
     def run(self):
         while True:
             yield from self._await_request()
             for req in self._poll_requests():
-                log.info(f'Purifying qubits: {req.q1.id} -X {req.q2.id}', at=self.bbpssw)
+                log.info(f'Purifying qubits: {req.q1.id} -X {req.q2.id}', at=self.dejmps)
                 output = yield from self.perform_purification([req.q1.position, req.q2.position])
                 [result] = output['m']
 
@@ -129,10 +137,10 @@ class _PurificationMinion (QueuedProtocol):
                         qubit2=req.q2.id
                     )
                 ]
-                self.bbpssw.cport.tx_output(Message(msg,
-                    header=self.bbpssw.MSG_HEADER
+                self.dejmps.cport.tx_output(Message(msg,
+                    header=self.dejmps.MSG_HEADER
                 ))
-                log.info(log.msg2str(msg), outof=self.bbpssw)
+                log.info(log.msg2str(msg), outof=self.dejmps)
                 self.send_signal(
                     _PurificationMinion.MEASUREMENT_COMPLETED,
                     _PurificationRecord(_RecordType.MEASURED, req.q1.id, req.q2.id, result, req.master_req)
@@ -150,7 +158,7 @@ class _PurificationMinion (QueuedProtocol):
     @program_function(2, ProgramPriority.REAL_TIME)
     def perform_purification(self, prog, qubits):
         [q1, q2] = qubits
-        angle = np.pi/2 if self.bbpssw.mode else -np.pi/2
+        angle = np.pi/2 if self.dejmps.mode else -np.pi/2
         prog.apply(INSTR_ROT_X, [q1], angle=angle)
         prog.apply(INSTR_ROT_X, [q2], angle=angle)
         prog.apply(INSTR_CNOT, [q1, q2])

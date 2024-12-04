@@ -151,8 +151,7 @@ def create_physical_link(config, dst, net, alice, bob):
 
 def create_link_with_insertion(
     config, dst, net, alice, bob, 
-    part_alice=None, part_bob=None,
-    clk_factor=1
+    part_alice=None, part_bob=None
 ):
     comm = config.node.processor.communication_qubit
     qfc = config.node.qfc
@@ -175,8 +174,7 @@ def create_link_with_insertion(
 
     common_link = StateInsertionProtocol(
         alice, bob, link_desc,
-        name=f'{alice.name}{bob.name}INS',
-        clk_factor=clk_factor
+        name=f'{alice.name}{bob.name}INS'
     )
     alice_link, bob_link = common_link.node_protocols(part_alice, part_bob)
     common_link.start()
@@ -188,7 +186,8 @@ def connect_with_rep_chain(
     config, net, alice, bob, dst, count,
     app_headers=None, multi_centre=False,
     reserve_on_nodes=0,
-    link_setup=lambda n1,l1,p1,n2,l2,p2: (l1,l2)
+    link_setup=lambda n1,l1,p1,n2,l2,p2: (l1,l2),
+    net_cutoff = 10*SECOND
 ):
     if count < 1:
         raise ValueError('There must be 1 repeater in the network')
@@ -211,22 +210,20 @@ def connect_with_rep_chain(
     if multi_centre:
         rep_partA = reps[0].qmemory.centre_partition(0)
         rep_partB = reps[0].qmemory.centre_partition(1)
-        clk_factor = 1
     else:
         whole_part = reps[0].qmemory.centre_partition()
         half = len(whole_part) // 2
         rep_partA = whole_part[:half]
         rep_partB = whole_part[half:]
-        clk_factor = 2
 
     alice_link, repA = create_link_with_insertion(
         config, node_dst, net, alice, reps[0],
-        part_alice=partA, part_bob=rep_partA, clk_factor=clk_factor
+        part_alice=partA, part_bob=rep_partA
     )
     alice_link, repA = link_setup(alice, alice_link, 'cdir', reps[0], repA, 'cA')
     repB, bob_link = create_link_with_insertion(
         config, node_dst, net, reps[-1], bob,
-        part_alice=rep_partB, part_bob=partB, clk_factor=clk_factor
+        part_alice=rep_partB, part_bob=partB
     )
     repB, bob_link = link_setup(reps[-1], repB, 'cB', bob, bob_link, 'cdir')
     if count > 1:
@@ -243,7 +240,7 @@ def connect_with_rep_chain(
         )
         repl1, repl2 = create_link_with_insertion(
             config, node_dst, net, rep1, rep2,
-            part_alice=rep_partB, part_bob=rep_partA, clk_factor=clk_factor
+            part_alice=rep_partB, part_bob=rep_partA
         )
         repl1.name += '2'
         repl2.name += '1'
@@ -262,8 +259,8 @@ def connect_with_rep_chain(
 
     alice_net = SwapWithRepeaterProtocol(
         alice, 'cdir', alice_link,
-        cutoff_time=10*SECOND, name=f'{alice.name}NET')
+        cutoff_time=net_cutoff, name=f'{alice.name}NET')
     bob_net = SwapWithRepeaterProtocol(
         bob, 'cdir', bob_link,
-        cutoff_time=10*SECOND, name=f'{bob.name}NET')
+        cutoff_time=net_cutoff, name=f'{bob.name}NET')
     return alice_net, bob_net

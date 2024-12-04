@@ -3,6 +3,7 @@ from .network_layer import *
 from .swap_with_rep import *
 from .repeater_protocol import *
 from .forward_protocol import *
+from .net_purification import *
 
 __all__ = [
     # network_layer.py
@@ -21,4 +22,7 @@ __all__ = [
 
     # forward_protocol.py
     'ForwardProtocol'
+
+    # net_purification.py
+    'NetWithPurification'
 ]

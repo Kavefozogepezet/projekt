@@ -415,7 +415,7 @@ class _RepEtgmManagerMinion (NodeProtocol):
                 return
         self._discard_records.append(discard_rec)
 
-    @program_function(2, ProgramPriority.HIGH)
+    @program_function(2, ProgramPriority.HIGH, 'net')
     def swap(self, prog, qubits):
         [q1, q2] = qubits
         prog.apply(INSTR_CNOT, [q1, q2])

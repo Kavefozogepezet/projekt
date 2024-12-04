@@ -10,7 +10,7 @@ from simlog import log
 from components.protocols.util import *
 from components.protocols.link import \
     LinkResponseType, LinkWithPurification
-from components.protocols.purify import GreedyPurify, LadderPurify
+from components.protocols.purify import *
 from prep_net import *
 from config_reder import *
 
@@ -34,12 +34,15 @@ class PurifyStatLogger (LocalProtocol):
         self.F = np.zeros(self.rounds, dtype=float)
         self.t = np.zeros(self.rounds, dtype=float)
         self.T = -ns.sim_time()
+        start = ns.sim_time()
 
         req1 = self.link1.request_entanglement(response_type=LinkResponseType.CONSECUTIVE)
         req2 = self.link2.request_entanglement(response_type=LinkResponseType.CONSECUTIVE)
 
         for i in range(self.rounds):
             [resp1, resp2] = yield from ProtocolRequest.await_all(self, req1, req2)
+            self.t[i] = (ns.sim_time() - start) / SECOND
+            start = ns.sim_time()
             [q1] = self.node1.qmemory.peek([resp1.qubit.position])
             [q2] = self.node2.qmemory.peek([resp2.qubit.position])
             self.F[i] = ns.qubits.fidelity([q1, q2], ns.qubits.ketstates.b00, squared=True)
@@ -68,36 +71,38 @@ def main(config):
 
     #bar = tqdm(range(len(dsts) * len(iters)))
     for dst in tqdm(dsts):
-        F_last = 0
-        F_this = 0
         iterations = 0
-        for iterations in range(0, 7): 
+        max_iters = 7 if dst < 35 else 6
+        for iterations in range(0, max_iters):
             net, alice, bob = create_head_nodes(config, 'Quantum Network')
             direct = create_cfibre(config, dst, 'AlcBobDIR')
             connect_nodes(net, alice, 'cdir', bob, 'cdir', direct)
             alice_link, bob_link = create_link_with_insertion(config, dst, net, alice, bob)
 
-            alice_purify = GreedyPurify(alice, 'cdir', iterations, True, 2, log.Layer.LINK, 'AlcPUR')
+            alice_purify = LadderPurify(alice, 'cdir', iterations, True, 2, log.Layer.LINK, 'AlcPUR')
             alice_linkpurify = LinkWithPurification(
                 alice, alice_purify, alice_link, name='AlcLINKPUR')
 
-            bob_purify = GreedyPurify(bob, 'cdir', iterations, False, 2, log.Layer.LINK, 'BobPUR')
+            bob_purify = LadderPurify(bob, 'cdir', iterations, False, 2, log.Layer.LINK, 'BobPUR')
             bob_linkpurify = LinkWithPurification(
                 bob, bob_purify, bob_link, name='BobLINKPUR')
 
             logger = PurifyStatLogger(
-                alice, bob, alice_linkpurify, bob_linkpurify, rounds, data, iterations, f'greedy_{dst}')
+                alice, bob, alice_linkpurify, bob_linkpurify, rounds, f'greedy_{dst}')
             logger.start()
 
             ns.sim_run()
             ns.sim_reset()
-            print(f'Finished iteration {iterations}: {logger.F_avg}')
-            iterations += 1
-            F_last = F_this
-            F_this = logger.F_avg
-            #bar.update(1)
 
-    data.to_csv('data/greedy2.csv', index=True)
+            F_avg = np.average(logger.F)
+            f = rounds / logger.T
+
+            data.loc[iterations, f'{dst}_fidelity'] = F_avg
+            data.loc[iterations, f'{dst}_frequency'] = f
+
+            print(f'Finished iteration {iterations}: {F_avg}')
+
+    data.to_csv('data/ladder3.csv', index=True)
 
 
 def max_fidelity(config):
@@ -140,34 +145,61 @@ def max_fidelity(config):
                 F_avg, F_min, F_max = F_this, np.min(logger.F), np.max(logger.F)
                 f = rounds / logger.T
         df.iloc[i] = [dst, F_avg, F_min, F_max, iterations-1, f]
+        df.to_csv('data/maxF_dst2.csv', index=False)
 
-    df.to_csv('data/maxF_dst.csv', index=False)
 
 
 def test(config):
-    iterations = 7
+    #iterations = 7
     dst = 10
-    rounds = 10
+    rounds = 1
 
     net, alice, bob = create_head_nodes(config, 'Quantum Network')
     direct = create_cfibre(config, dst, 'AlcBobDIR')
     connect_nodes(net, alice, 'cdir', bob, 'cdir', direct)
     alice_link, bob_link = create_link_with_insertion(config, dst, net, alice, bob)
 
-    alice_purify = LadderPurify(alice, 'cdir', iterations, True, 2, log.Layer.LINK, 'AlcPUR')
+    alice_purify = MixedPurify(alice, 'cdir', 4, 2, True, 2, log.Layer.LINK, 'AlcPUR')
     alice_linkpurify = LinkWithPurification(
         alice, alice_purify, alice_link, name='AlcLINKPUR')
 
-    bob_purify = LadderPurify(bob, 'cdir', iterations, False, 2, log.Layer.LINK, 'BobPUR')
+    bob_purify = MixedPurify(bob, 'cdir', 4, 2, False, 2, log.Layer.LINK, 'BobPUR')
     bob_linkpurify = LinkWithPurification(
         bob, bob_purify, bob_link, name='BobLINKPUR')
 
     logger = PurifyStatLogger(
-        alice, bob, alice_linkpurify, bob_linkpurify, rounds, None, iterations, f'greedy_{dst}')
+        alice, bob, alice_linkpurify, bob_linkpurify, rounds, f'greedy_{dst}')
     logger.start()
 
     ns.sim_run()
     ns.sim_reset()
+
+
+def test_mixed(config):
+    dst = 20
+    mixiters = [(6,1), (2,2), (3,2), (4,2)]
+
+    for liter, giter in mixiters:
+        net, alice, bob = create_head_nodes(config, 'Quantum Network')
+        direct = create_cfibre(config, dst, 'AlcBobDIR')
+        connect_nodes(net, alice, 'cdir', bob, 'cdir', direct)
+        alice_link, bob_link = create_link_with_insertion(config, dst, net, alice, bob)
+
+        alice_purify = LadderPurify(alice, 'cdir', liter, True, 2, log.Layer.LINK, 'AlcPUR')
+        alice_linkpurify = LinkWithPurification(
+            alice, alice_purify, alice_link, name='AlcLINKPUR')
+
+        bob_purify = LadderPurify(bob, 'cdir', liter, False, 2, log.Layer.LINK, 'BobPUR')
+        bob_linkpurify = LinkWithPurification(
+            bob, bob_purify, bob_link, name='BobLINKPUR')
+
+        logger = PurifyStatLogger(
+            alice, bob, alice_linkpurify, bob_linkpurify, 10, f'greedy_{dst}')
+        logger.start()
+
+        ns.sim_run()
+        ns.sim_reset()
+        print(f'{liter}/{giter}', np.average(logger.F), 10/logger.T)
 
 
 if __name__ == '__main__':

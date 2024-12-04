@@ -81,7 +81,7 @@ class StateInsertionProtocol (LocalProtocol):
     _PROC_BUSY = 'PROC_BUSY'
 
 
-    def __init__(self, node1, node2, link_desc,  name=None, clk_factor=1):
+    def __init__(self, node1, node2, link_desc,  name=None):
         super().__init__(
             dict(node1=node1, node2=node2), name
         )
@@ -95,7 +95,6 @@ class StateInsertionProtocol (LocalProtocol):
         self.attempts2 = deque()
         self.gens = SortedKeyList(key=lambda item: item.ready_time)
         self.link_desc = link_desc
-        self.clk_factor = 1
         node1.qmemory.add_busy_subscriber(self._proc_busy_cb)
         node2.qmemory.add_busy_subscriber(self._proc_busy_cb)
 
@@ -123,11 +122,17 @@ class StateInsertionProtocol (LocalProtocol):
                     log.info('Generation resumed', at=self)
                 else:
                     self._insert_state(gen)
+                    self.node1.qmemory.register_usage('state_insertion', start_time, self.t_gen)
+                    self.node2.qmemory.register_usage('state_insertion', start_time, self.t_gen)
                     generated = True
             elif expr.second_term.first_term.value:
                 delta_t = ns.sim_time() - start_time
-                if self.t_halt > 0: self.t_halt -= delta_t
-                else: self.t_gen -= delta_t
+                if self.t_halt > 0:
+                    self.t_halt -= delta_t
+                else:
+                    self.node1.qmemory.register_usage('state_insertion', start_time, delta_t)
+                    self.node2.qmemory.register_usage('state_insertion', start_time, delta_t)
+                    self.t_gen -= delta_t
 
                 if self.node1.qmemory.busy:
                     busy_proc = self.node1.qmemory
@@ -152,9 +157,9 @@ class StateInsertionProtocol (LocalProtocol):
     
     def _timer_event(self):
         if self.t_halt > 0:
-            return self.await_timer(self.t_gen)
+            return self.await_timer(max(self.t_halt, 0))
         else:
-            return self.await_timer(self.t_gen)
+            return self.await_timer(max(self.t_gen, 0))
     
     def _proc_busy_event(self):
         return self.await_signal(
@@ -206,7 +211,7 @@ class StateInsertionProtocol (LocalProtocol):
         link = self.link_desc
         u = np.random.rand()*0.999
         tries = np.ceil( np.log(1-u) / np.log(1-link.p) )
-        ready_time = tries * self.link_desc.clk * self.clk_factor
+        ready_time = tries * self.link_desc.clk
 
         gen = _GenerationRecord(ready_time, int(tries), rec1, rec2, etgmid('link'))
         self.gens.add(gen)

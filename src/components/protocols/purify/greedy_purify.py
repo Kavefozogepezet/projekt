@@ -6,8 +6,8 @@ from .dejmps import *
 class GreedyPurify(PurificationProtocol):
     def __init__(self, node, cport, iterations, mode, queue_limit=2, log_layer=None, name='GreedyPurify'):
         super().__init__(node, iterations, queue_limit, log_layer, name)
-        self.bbpssw = DEJMPSProtocol(node, cport, mode, log_layer=log_layer, name=f"{name}'")
-        self.add_subprotocol(self.bbpssw, name='bbpssw')
+        self.dejmps = DEJMPSProtocol(node, cport, mode, log_layer=log_layer, name=f"{name}'")
+        self.add_subprotocol(self.dejmps, name='dejmps')
         self.current = None
         self.current_iters = 0
 
@@ -21,7 +21,7 @@ class GreedyPurify(PurificationProtocol):
             self.current = qubit
             log.info(f'Purifying {qubit.id}', at=self)
         else:
-            resp = yield from (self.bbpssw
+            resp = yield from (self.dejmps
                 .purify(self.current, qubit)
                 .await_as(self))
             self.node.qmemory.deallocate([qubit.position])
@@ -42,4 +42,4 @@ class GreedyPurify(PurificationProtocol):
             self.node.qmemory.deallocate([self.current.position])
             self.current = None
         self.current_iters = 0
-        self.bbpssw.reset()
+        self.dejmps.reset()

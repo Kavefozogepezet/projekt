@@ -18,19 +18,18 @@ class SwapWithRepeaterProtocol (NetworkLayer):
     COMPLETE_MSG = 'COMPLETE_MSG'
 
     def __init__(self, node, cport, link_protocol, cutoff_time=None, name=None):
-        super().__init__(node, cport, name)
+        super().__init__(node, name)
         self.add_subprotocol(link_protocol, name='link_protocol')
         self.add_subprotocol(_SWRCorrectionMinion(node, self), name='minion')
         self.cutoff_time = cutoff_time
         self.records = dict()
+        self.cport = self.node.ports[cport]
 
     def run(self):
         self.start_subprotocols()
         yield from super().run()
 
     def _initiate(self, req):
-        cport = self.node.ports[self.cport_name]
-
         if req.req_label == RoutingRole.HEADEND:
             req.session_id = uuid()
             msg = [
@@ -41,14 +40,14 @@ class SwapWithRepeaterProtocol (NetworkLayer):
                     cutoff_time=self.cutoff_time
                 )
             ]
-            cport.tx_output(Message(msg,
+            self.cport.tx_output(Message(msg,
                 header=NetworkLayer.MSG_HEADER
             ))
             log.info(log.msg2str(msg), outof=self)
         elif req.req_label == RoutingRole.TAILEND:
             while True:
-                yield self.await_port_input(cport)
-                msg = cport.rx_input(header=NetworkLayer.MSG_HEADER)
+                yield self.await_port_input(self.cport)
+                msg = self.cport.rx_input(header=NetworkLayer.MSG_HEADER)
                 if not msg:
                     continue
 
@@ -65,16 +64,18 @@ class SwapWithRepeaterProtocol (NetworkLayer):
             raise ValueError(f'Unknown role: {req.req_label}')
 
     def _swap(self, req):
-        cport = self.node.ports[self.cport_name]
         link_proto = self.subprotocols['link_protocol']
         self.count = 0
         link_req = link_proto.request_entanglement(
             response_type=LinkResponseType.CONSECUTIVE
         )
 
-        while self.count < req.count:
+        while (
+            (req.count is None or self.count < req.count)
+            and not req.cancelled
+        ):
             resp_event = link_req.resp_event(self)
-            msg_event = self.await_port_input(cport)
+            msg_event = self.await_port_input(self.cport)
 
             expr = yield resp_event | msg_event
             if expr.first_term.value:
@@ -96,7 +97,6 @@ class SwapWithRepeaterProtocol (NetworkLayer):
             self._send_complete(req)
 
     def _handle_new_link_pair(self, req, link_req):
-        cport = self.node.ports[self.cport_name]
         resp = link_req.get_answare(self)
 
         if req.req_label == RoutingRole.HEADEND: net_id = etgmid('net')
@@ -115,14 +115,13 @@ class SwapWithRepeaterProtocol (NetworkLayer):
                     cZ=False
                 )
             ]
-        cport.tx_output(Message(msg,
+        self.cport.tx_output(Message(msg,
             header=subheader(NetworkLayer.MSG_HEADER, req.session_id)
         ))
         log.info(f'Link ready -> {log.msg2str(msg)}', outof=self)
 
     def _handle_incoming_meassage(self, req):
-        cport = self.node.ports[self.cport_name]
-        msg = cport.rx_input(header=subheader(NetworkLayer.MSG_HEADER, req.session_id))
+        msg = self.cport.rx_input(header=subheader(NetworkLayer.MSG_HEADER, req.session_id))
         if not msg:
             return
 
@@ -155,22 +154,20 @@ class SwapWithRepeaterProtocol (NetworkLayer):
             raise ValueError(f'Unexpected message type: {msg_type}')
         
     def _send_complete(self, req):
-        cport = self.node.ports[self.cport_name]
         msg = [
             SwapWithRepeaterProtocol.COMPLETE_MSG,
             dict(session_id=req.session_id)
         ]
-        cport.tx_output(Message(msg,
+        self.cport.tx_output(Message(msg,
             header=subheader(NetworkLayer.MSG_HEADER, req.session_id),
         ))
         log.info(log.msg2str(msg), outof=self)
 
     def _await_complete(self, req):
-        cport = self.node.ports[self.cport_name]
         log.info('Waiting for COMPLETE_MSG', at=self)
         while True:
-            yield self.await_port_input(cport)
-            msg = cport.rx_input(header=subheader(NetworkLayer.MSG_HEADER, req.session_id))
+            yield self.await_port_input(self.cport)
+            msg = self.cport.rx_input(header=subheader(NetworkLayer.MSG_HEADER, req.session_id))
             if not msg:
                 continue
 
@@ -214,7 +211,7 @@ class _SWRCorrectionMinion (QueuedProtocol):
             final=final
         )
 
-    @program_function(1, ProgramPriority.HIGH)
+    @program_function(1, ProgramPriority.HIGH, 'net')
     def _correct(self, prog, qubits, cX, cZ):
         if cX: prog.apply(INSTR_X, qubits)
         if cZ: prog.apply(INSTR_Z, qubits)

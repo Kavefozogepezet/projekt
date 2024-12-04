@@ -76,7 +76,7 @@ class TeleportProtocol (TransportLayer):
                     porition=qubits[id]
                 )
 
-    @program_function(2, ProgramPriority.HIGH)
+    @program_function(2, ProgramPriority.HIGH, 'trans')
     def _measure(self, prog, qubits):
         [q1, q2] = qubits
         prog.apply(INSTR_CNOT, [q1, q2])
@@ -84,7 +84,7 @@ class TeleportProtocol (TransportLayer):
         prog.apply(INSTR_MEASURE, q1, output_key='cZ')
         prog.apply(INSTR_MEASURE, q2, output_key='cX')
 
-    @program_function(1, ProgramPriority.HIGH)
+    @program_function(1, ProgramPriority.HIGH, 'trans')
     def _correct(self, prog, qubit, cX, cZ):
         if cX: prog.apply(INSTR_X, qubit)
         if cZ: prog.apply(INSTR_Z, qubit)

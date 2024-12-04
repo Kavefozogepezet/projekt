@@ -62,7 +62,7 @@ class SwapWithBSAProtocol (PhysicalLayer):
             req.answare(result=PhysicalLayer.FAILURE)
             log.info(f'Entanglement swapping failed', into=self)
             
-    @program_function(2, ProgramPriority.REAL_TIME)
+    @program_function(2, ProgramPriority.REAL_TIME, 'phys')
     def prepare_bell_state(self, prog, qubits):
         [q1, q2] = qubits
         prog.apply(INSTR_INIT, q1)
@@ -70,7 +70,7 @@ class SwapWithBSAProtocol (PhysicalLayer):
         prog.apply(INSTR_H, q1)
         prog.apply(INSTR_CNOT, [q1, q2])
 
-    @program_function(1, ProgramPriority.REAL_TIME)
+    @program_function(1, ProgramPriority.REAL_TIME, 'phys')
     def execute_correction(self, prog, qubits, cX=False, cZ=False):
         [q] = qubits
         if cX: prog.apply(INSTR_X, q)

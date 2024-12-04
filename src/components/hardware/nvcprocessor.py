@@ -1,6 +1,7 @@
 
 import numpy as np
 from enum import Enum
+import netsquid as ns
 from netsquid.nodes import Node
 from netsquid.components import QuantumProcessor
 from netsquid.components.qmemory import QuantumMemoryError
@@ -12,6 +13,7 @@ from netsquid.components.qprocessor import PhysicalInstruction
 from netsquid.components.models.qerrormodels import DepolarNoiseModel, QuantumErrorModel
 from netsquid.qubits import qubitapi as qapi
 from netsquid.qubits.operators import X as X_op
+from collections import defaultdict, deque
 
 
 from simlog import log
@@ -23,13 +25,18 @@ class ProgramPriority (Enum):
     LOW = 3
 
 
-def program_function(num_qubits, priority):
+def program_function(num_qubits, priority, reason=None):
     def program_function_decorator(prog_func):
         def program_executor(self, qubit_mapping, *args, **kwargs):
+            _reason = (
+                reason if reason is not None
+                else self.prog_reason if hasattr(self, 'prog_reason')
+                else 'other'
+            )
             prog = QuantumProgram(num_qubits)
             qindices = prog.get_qubit_indices(num_qubits)
             prog_func(self, prog, qindices, *args, **kwargs)
-            yield from self.node.qmemory.schedule_program(prog, priority, qubit_mapping)
+            yield from self.node.qmemory.schedule_program(prog, priority, qubit_mapping, _reason)
             return prog.output
         return program_executor
     return program_function_decorator
@@ -155,6 +162,8 @@ class NVCProcessor (QuantumProcessor):
         self.num_in_centre = num_in_centre
         self.centre_count = centre_count
         self.busy_subscribers = []
+        self.usage_info = defaultdict(int)
+        self.usage_timeline = deque()
         for mem in self.mem_positions:
             mem.in_use_event_enabled = True
 
@@ -164,18 +173,27 @@ class NVCProcessor (QuantumProcessor):
     def remove_busy_subscriber(self, callback):
         self.busy_subscribers.remove(callback)
 
-    def schedule_program(self, program, priority, qubit_mapping):
+    def schedule_program(self, program, priority, qubit_mapping, reason):
         while self.busy:
             end_time = self.sequence_end_time
             end_time += self.scheduler_dt * priority.value
             log.info(f'Program execution delayed until {end_time}', at=self)
             yield Protocol().await_timer(end_time=end_time)
-        for callback in self.busy_subscribers:
-            callback()
-        yield self.execute_program(
+        prog_ev = self.execute_program(
             program, qubit_mapping=qubit_mapping
         )
+        self.register_usage(
+            reason, ns.sim_time(),
+            self.sequence_end_time - ns.sim_time()
+        )
+        for callback in self.busy_subscribers:
+            callback()
+        yield prog_ev
         return program.output
+    
+    def register_usage(self, reason, start, duration):
+        self.usage_info[reason] += duration
+        self.usage_timeline.append((start, reason, duration))
 
     def photon_pos(self, centre=0):
         return self.num_in_centre * self.centre_count + centre

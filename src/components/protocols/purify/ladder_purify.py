@@ -7,8 +7,8 @@ from .dejmps import *
 class LadderPurify(PurificationProtocol):
     def __init__(self, node, cport, iterations, mode, queue_limit=2, log_layer=None, name='LadderPurify'):
         super().__init__(node, iterations, queue_limit, log_layer, name)
-        self.bbpssw = DEJMPSProtocol(node, cport, mode, log_layer=log_layer, name=f"{name}'")
-        self.add_subprotocol(self.bbpssw, name='bbpssw')
+        self.dejmps = DEJMPSProtocol(node, cport, mode, log_layer=log_layer, name=f"{name}'")
+        self.add_subprotocol(self.dejmps, name='dejmps')
         self.iterations = iterations
         self.ladder = [None] * (iterations+2)
 
@@ -24,7 +24,7 @@ class LadderPurify(PurificationProtocol):
         self.ladder[1] = qubit
         j = 1
         while j <= self.iterations and self.ladder[j] is not None:
-            resp = yield from (self.bbpssw
+            resp = yield from (self.dejmps
                 .purify(self.ladder[j], self.ladder[j-1])
                 .await_as(self))
             
@@ -53,7 +53,7 @@ class LadderPurify(PurificationProtocol):
         qubits = [q.position for q in self.ladder if q is not None]
         self.node.qmemory.deallocate(qubits)
         self.ladder = [None] * (self.iterations+2)
-        self.bbpssw.reset()
+        self.dejmps.reset()
 
     def _drop_qubit(self, i):
         if self.ladder[i] is not None:

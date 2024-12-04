@@ -11,20 +11,21 @@ class ForwardProtocol(NodeProtocol):
         self.headers = headers
 
     def run(self):
-        evexpr = None
-        for port in self.port_map:
-            _port = self.node.ports[port]
-            ev = self.await_port_input(_port)
-            if evexpr:
-                evexpr = ev
-            else:
-                evexpr = evexpr & ev
+        while True:
+            evexpr = None
+            for port in self.port_map:
+                _port = self.node.ports[port]
+                ev = self.await_port_input(_port)
+                if evexpr:
+                    evexpr = ev
+                else:
+                    evexpr = evexpr | ev
 
-        yield evexpr
-        for port_in, port_out in self.port_map.items():
-            for header in self.headers:
-                msg = self.node.ports[port_in].rx_input(header)
-                if msg:
-                    log.info(log.msg2str(msg), into=self)
-                    self.node.ports[port_out].tx_output(msg)
-                    log.info(log.msg2str(msg), outof=self)
+            yield evexpr
+            for port_in, port_out in self.port_map.items():
+                for header in self.headers:
+                    msg = self.node.ports[port_in].rx_input(header=header)
+                    if msg:
+                        log.info(log.msg2str(msg.items), into=self)
+                        self.node.ports[port_out].tx_output(msg)
+                        log.info(log.msg2str(msg.items), outof=self)

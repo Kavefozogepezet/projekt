@@ -1,5 +1,6 @@
 
 from enum import Enum
+import inspect
 
 from ..util import *
 
@@ -16,11 +17,10 @@ class NetworkLayer (
     MSG_HEADER = 'NetworkLayer'
     ETGM_READY = 'ETGM_READY'
 
-    def __init__(self, node, cport, name=None):
+    def __init__(self, node, name=None):
         self.log_layer = log.Layer.NETWORK
         super().__init__(node, name)
         self.add_signal(NetworkLayer.ETGM_READY)
-        self.cport_name = cport
 
     def create_statemachine(self):
         return NetworkStatemachine(self)
@@ -30,6 +30,7 @@ class NetworkLayer (
             RoutingRole.HEADEND,
             NetworkLayer.ETGM_READY,
             count=count,
+            cancelled=False,
             **kwargs
         )
         
@@ -39,6 +40,7 @@ class NetworkLayer (
         return self._push_request(
             RoutingRole.TAILEND,
             NetworkLayer.ETGM_READY,
+            cancelled=False,
             **kwargs
         )
         
@@ -48,6 +50,10 @@ class NetworkLayer (
 
     @abstractmethod
     def _swap(self, req):
+        pass
+
+    @abstractmethod
+    def _terminate(self, req):
         pass
 
 
@@ -66,7 +72,10 @@ class NetworkStatemachine (ProtocolStateMachine):
     @protocolstate(NetworkState.INITIATING)
     def _initiating(self):
         req = self.proto._peek_request()
-        yield from self.proto._initiate(req)
+        if inspect.isgeneratorfunction(self.proto._initiate):
+            yield from self.proto._initiate(req)
+        else:
+            self.proto._initiate(req)
         return NetworkState.SWAPPING
 
     @protocolstate(NetworkState.SWAPPING)
@@ -78,7 +87,11 @@ class NetworkStatemachine (ProtocolStateMachine):
     @protocolstate(NetworkState.TERMINATING)
     def _terminating(self):
         req = self.proto._poll_request()
-        yield from self.proto._terminate(req)
+        if inspect.isgeneratorfunction(self.proto._terminate):
+            yield from self.proto._terminate(req)
+        else:
+            self.proto._terminate(req)
+            
         if self.proto._peek_request():
             return NetworkState.INITIATING
         else:

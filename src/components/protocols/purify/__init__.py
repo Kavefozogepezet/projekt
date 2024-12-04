@@ -3,6 +3,7 @@ from .purification import *
 from .dejmps import *
 from .ladder_purify import *
 from .greedy_purify import *
+from .mixed_purify import *
 
 __all__ = [
     # purification.py
@@ -15,5 +16,8 @@ __all__ = [
     'LadderPurify',
 
     # greedy_purify.py
-    'GreedyPurify'
+    'GreedyPurify',
+
+    # mixed_purify.py
+    'MixedPurify'
 ]

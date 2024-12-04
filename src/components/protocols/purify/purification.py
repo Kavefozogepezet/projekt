@@ -38,7 +38,7 @@ class PurificationProtocol (QueuedProtocol):
                     else:
                         yield from self.handle_pair(req.qubit)
                 elif req.req_label == PurificationProtocol._RESET:
-                    yield from self.handle_reset()
+                    self.handle_reset()
 
     def add_pair(self, qubit):
         self._push_request(

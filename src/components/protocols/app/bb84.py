@@ -87,7 +87,7 @@ class BB84Protocol(QKDProtocol):
         real_key = np.delete(same_base, slice(None, None, 3))
         return real_key, test_key
 
-    @program_function(1, ProgramPriority.HIGH)
+    @program_function(1, ProgramPriority.HIGH, 'qkd')
     def _prepare(self, prog, qubits, base, bit):
         [q] = qubits
         prog.apply(INSTR_INIT, q)
@@ -96,7 +96,7 @@ class BB84Protocol(QKDProtocol):
         if bit == 1:
             prog.apply(INSTR_X, q)
 
-    @program_function(1, ProgramPriority.HIGH)
+    @program_function(1, ProgramPriority.HIGH, 'qkd')
     def _prepare(self, prog, qubits, base):
         [q] = qubits
         if base == 1:

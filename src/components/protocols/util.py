@@ -22,8 +22,11 @@ EntanglementRecord = namedtuple(
 )
 
 
+idcount = 1
 def etgmid(namespace):
-    id = uuid()
+    global idcount
+    id = idcount
+    idcount += 1
     return f'{namespace}/{id}'
 
 
@@ -215,22 +218,19 @@ class ProtocolStateMachine:
             handler = self._state_handlers[self._state]
             if not handler:
                 raise RuntimeError(f'No handler for state {self._state} in {self.__class__}')
+            
             next_state = None
-            handler_gen = handler()
-            if inspect.isgenerator(handler_gen):
-                try:
-                    result = None
-                    while True:
-                        result = yield handler_gen.send(result)
-                except StopIteration as e:
-                    next_state = e.value
+            if inspect.isgeneratorfunction(handler):
+                next_state = yield from handler()
             else:
-                next_state = handler_gen
+                next_state = handler()
 
             if next_state is None:
-                raise RuntimeError(f'Handler for state {self._state} in {self.__class__} returned None')
+                continue
+                raise RuntimeError(f'Handler for state {self._state} in {self.__class__} returned None:\n{inspect.getsource(handler)}')
             if self._state in self._final_states:
                 break
+
             self.set_state(next_state)
 
 
