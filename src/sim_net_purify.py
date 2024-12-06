@@ -255,15 +255,8 @@ def end_to_end(dst, counts, nl, ng, ll, lg):
         df.to_csv(f'data/e2edst/dst_{dst}_{nl}-{ng}+{ll}-{lg}.csv', index=True)
 
 
-def init_netsquid(loglevel):
-    if not os.path.exists('log'):
-        os.makedirs('log')
-    log.init(loglevel, log.TimeUnit.MICROSECONDS)
-    ns.set_qstate_formalism(QFormalism.DM)
-
-
 def cutoff_F_vd_f(lock, config, dst, cutoff):
-    init_netsquid(logging.CRITICAL)
+    simulation(lock)
     liter, giter = 3, 2
     rounds = 200
 

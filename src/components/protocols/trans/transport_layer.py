@@ -16,13 +16,16 @@ class TransportLayer (
     MSG_HEADER = 'TransportLayer'
 
     READY_TO_TRANSMIT = 'READY_TO_TRANSMIT'
-    TRANSMITTED = 'TRANSMITTED'
+    RECIEVED = 'RECIEVED'
 
     _POS_SPECIFIED = '_POS_SPECIFIED'
 
     def __init__(self, node, cport, name=None):
         self.log_layer = log.Layer.TRANSPORT
         super().__init__(node, name)
+        self.add_signal(TransportLayer.READY_TO_TRANSMIT)
+        self.add_signal(TransportLayer.RECIEVED)
+        self.add_signal(TransportLayer._POS_SPECIFIED)
         self.cport_name = cport
 
     def create_statemachine(self):
@@ -31,7 +34,7 @@ class TransportLayer (
     def transmit(self, method, count):
         return self._push_request(
             Role.SENDER,
-            TransportLayer.MSG_HEADER,
+            TransportLayer.READY_TO_TRANSMIT,
             method=method,
             count=count
         )
@@ -39,7 +42,7 @@ class TransportLayer (
     def recieve(self):
         return self._push_request(
             Role.RECEIVER,
-            TransportLayer.TRANSMITTED
+            TransportLayer.RECIEVED
         )
     
     @abstractmethod
@@ -50,11 +53,11 @@ class TransportLayer (
     def _recieve(self, req):
         pass
 
-    def _transmit_hook(self):
+    def _transmit_hook(self, qpair):
         def _hook(position):
             self.send_signal(
                 TransportLayer._POS_SPECIFIED,
-                position=position
+                dict(position=position, qpair=qpair)
             )
         return _hook
     
@@ -72,9 +75,9 @@ class TransportStatemachine (ProtocolStateMachine):
 
     @protocolstate(TransportState.TRANSMITTING)
     def _transmitting(self):
-        req = yield from self.proto._await_request()
-        if req.req_label == Role.SENDER:
-            yield from self.proto._transmit(req)
-        else:
-            yield from self.proto._recieve(req)
-        return TransportState.RECIEVING
+        for req in self.proto._poll_requests():
+            if req.req_label == Role.SENDER:
+                yield from self.proto._transmit(req)
+            else:
+                yield from self.proto._recieve(req)
+        return TransportState.IDLE

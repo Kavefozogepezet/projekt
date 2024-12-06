@@ -229,11 +229,13 @@ class _DiscardRecord:
 
 
 class _RepEtgmManagerMinion (NodeProtocol):
-    _LINK_READY = 'RepEtgmManagerMinion.LINK_READY'
+    _LINK_READY = 'LINK_READY'
+    _RESET = 'RESET'
 
     def __init__(self, node, rep_proto, name=None):
         super().__init__(node, name)
         self.add_signal(_RepEtgmManagerMinion._LINK_READY)
+        self.add_signal(_RepEtgmManagerMinion._RESET)
         self.reset(init=True)
         self.rep_proto = rep_proto
 
@@ -250,12 +252,17 @@ class _RepEtgmManagerMinion (NodeProtocol):
         self._track_queue = []
         self._swap_records = []
         self._discard_records = []
+        self.send_signal(_RepEtgmManagerMinion._RESET)
 
     def run(self):
         while True:
             link_ready = self.await_signal(
                 sender=self,
                 signal_label=_RepEtgmManagerMinion._LINK_READY
+            )
+            reset_ev = self.await_signal(
+                sender=self,
+                signal_label=_RepEtgmManagerMinion._RESET
             )
             next_cutoff = None
             if len(self._upstream) > 0:
@@ -266,14 +273,15 @@ class _RepEtgmManagerMinion (NodeProtocol):
             if next_cutoff is not None:
                 next_cutoff = max(next_cutoff, ns.sim_time())
                 qubit_expired = self.await_timer(end_time=next_cutoff)
-                expr = yield link_ready | qubit_expired
+                expr = yield link_ready | (qubit_expired | reset_ev)
                 if expr.first_term.value:
                     yield from self._attempt_swap()
-                else:
+                elif expr.second_term.first_term.value:
                     self._handle_expired_qubit()
             else:
-                yield link_ready
-                self._attempt_swap()
+                expr = yield link_ready | reset_ev
+                if expr.first_term.value:
+                    yield from self._attempt_swap()
 
     def register_upstream(self, qubit):
         self._upstream.append(_LinkRecord(qubit, self.cutoff_time))
@@ -415,7 +423,7 @@ class _RepEtgmManagerMinion (NodeProtocol):
                 return
         self._discard_records.append(discard_rec)
 
-    @program_function(2, ProgramPriority.HIGH, 'net')
+    @program_function(2, ProgramPriority.HIGH, 'swap')
     def swap(self, prog, qubits):
         [q1, q2] = qubits
         prog.apply(INSTR_CNOT, [q1, q2])

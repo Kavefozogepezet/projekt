@@ -6,7 +6,7 @@ __all__ = [
     # transport_layer.py
     'TransportMethod',
     'TransportLayer',
-    'TrasportState',
+    'TransportState',
     'TransportStatemachine',
 
     # teleport_protocol.py

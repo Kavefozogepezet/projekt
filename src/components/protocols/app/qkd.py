@@ -6,22 +6,29 @@ class QKDProtocol (
     StatefulProtocolTempalte(QueuedProtocol),
     metaclass=Abstract
 ):
+    KEY_READY = 'KEY_READY'
+
     def __init__(self, *args, **kwargs):
         self.log_layer = log.Layer.APP
         super().__init__(*args, **kwargs)
+        self.add_signal(QKDProtocol.KEY_READY)
 
     def generate_key(self, length):
         return self._push_request(
             Role.SENDER,
-            QKDProtocol.GENERATE_KEY,
+            QKDProtocol.KEY_READY,
             length=length
         )
     
-    def recieve_key(self):
+    def recieve_key(self, length):
         return self._push_request(
             Role.RECEIVER,
-            QKDProtocol.RECIEVE_KEY
+            QKDProtocol.KEY_READY,
+            length=length
         )
+    
+    def create_statemachine(self):
+        return QKDStatemachine(self)
     
     @abstractmethod
     def _generate_qubits(self, length):
@@ -49,13 +56,13 @@ class QKDState (Enum):
 class QKDStatemachine (ProtocolStateMachine):
     @protocolstate(QKDState.IDLE, initial=True)
     def _idle(self):
-        yield from self._await_request()
-        req = self._peek_request()
+        yield from self.proto._await_request()
+        req = self.proto._peek_request()
         return QKDState.GENERATING
 
     @protocolstate(QKDState.GENERATING)
     def _generating(self):
-        req = self._peek_request()
+        req = self.proto._peek_request()
         if req.req_label == Role.SENDER:
             yield from self.proto._generate_qubits(req)
         elif req.req_label == Role.RECEIVER:
@@ -64,7 +71,7 @@ class QKDStatemachine (ProtocolStateMachine):
 
     @protocolstate(QKDState.REVEALING)
     def _revealing(self):
-        req = self._poll_request()
+        req = self.proto._poll_request()
         if req.req_label == Role.SENDER:
             yield from self.proto._sender_reveal(req)
         elif req.req_label == Role.RECEIVER:

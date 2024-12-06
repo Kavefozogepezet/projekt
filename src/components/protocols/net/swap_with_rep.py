@@ -24,6 +24,7 @@ class SwapWithRepeaterProtocol (NetworkLayer):
         self.cutoff_time = cutoff_time
         self.records = dict()
         self.cport = self.node.ports[cport]
+        self.completed = False
 
     def run(self):
         self.start_subprotocols()
@@ -64,6 +65,7 @@ class SwapWithRepeaterProtocol (NetworkLayer):
             raise ValueError(f'Unknown role: {req.req_label}')
 
     def _swap(self, req):
+        self.completed = False
         link_proto = self.subprotocols['link_protocol']
         self.count = 0
         link_req = link_proto.request_entanglement(
@@ -73,6 +75,7 @@ class SwapWithRepeaterProtocol (NetworkLayer):
         while (
             (req.count is None or self.count < req.count)
             and not req.cancelled
+            and not self.completed
         ):
             resp_event = link_req.resp_event(self)
             msg_event = self.await_port_input(self.cport)
@@ -91,9 +94,12 @@ class SwapWithRepeaterProtocol (NetworkLayer):
     def _terminate(self, req):
         if req.req_label == RoutingRole.HEADEND:
             self._send_complete(req)
+            self.completed = True
             yield from self._await_complete(req)
         else:
-            yield from self._await_complete(req)
+            if not self.completed:
+                yield from self._await_complete(req)
+                self.completed = True
             self._send_complete(req)
 
     def _handle_new_link_pair(self, req, link_req):
@@ -150,6 +156,8 @@ class SwapWithRepeaterProtocol (NetworkLayer):
             rec = self.records.pop(id)
             self.node.qmemory.destroy([rec.position])
             log.info(f'Failed: {log.msg2str(msg.items)}', into=self)
+        elif msg_type == SwapWithRepeaterProtocol.COMPLETE_MSG:
+            self.completed = True
         else:
             raise ValueError(f'Unexpected message type: {msg_type}')
         

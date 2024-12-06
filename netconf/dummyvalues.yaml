@@ -1,20 +1,20 @@
 node:
   processor:
     communication_qubit:
-      T1: 3600s
-      T2: 1.46s
-      F_init: 0.99
+      T1: 36000s
+      T2: 36000s
+      F_init: 1
       t_init: 8us
-      F_readout: 0.93
+      F_readout: 1
       t_readout: 40us
       F_gate: 1
       t_gate: 5ns
       photon_collection: 0.286
     memory_qubits:
       num_in_centre: 9
-      T1: 3600s
-      T2: 12.9s
-      F_init: 0.97
+      T1: 36000s
+      T2: 36000s
+      F_init: 1
       t_init: 310us
       F_gate: 1
       t_gate: 20us
@@ -31,7 +31,7 @@ node:
 fibre:
   attenuation: 0.2
   index_of_refraction: 1.45
-  depolarization_length: 100
+  depolarization_length: 100000000
 bsa:
   SPD_efficiency: 0.93
   SPD_rst: 40us

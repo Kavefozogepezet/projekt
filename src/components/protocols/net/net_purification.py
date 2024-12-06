@@ -59,6 +59,7 @@ class NetWithPurification (NetworkLayer):
             if expr.first_term.value:
                 resp = self.net_req.get_answare(self)
                 self.purify_proto.add_pair(resp.qubit)
+                log.info(f'Added qubit to purification: {resp.qubit}', at=self)
             else:
                 self.count += 1
                 qubit = self.purify_proto.get_signal_result(
@@ -68,6 +69,7 @@ class NetWithPurification (NetworkLayer):
                     qubit=qubit,
                     final=self.count==req.count
                 )
+                log.info(f'Delivered qubit: {qubit}', at=self)
         
         self.net_req.cancelled = True
         self.purify_proto.reset()

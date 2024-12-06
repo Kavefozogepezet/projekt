@@ -192,8 +192,9 @@ class NVCProcessor (QuantumProcessor):
         return program.output
     
     def register_usage(self, reason, start, duration):
+        pass
         self.usage_info[reason] += duration
-        self.usage_timeline.append((start, reason, duration))
+        self.usage_timeline.append((start, duration, reason))
 
     def photon_pos(self, centre=0):
         return self.num_in_centre * self.centre_count + centre
